@@ -70,3 +70,7 @@ ZStack {
 }
 .coordinateSpace(name: coordinateSpaceName)
 ```
+
+---
+
+Created by [Anton Heestand](https://heestand.xyz)
