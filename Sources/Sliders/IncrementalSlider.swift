@@ -7,20 +7,67 @@
 
 import SwiftUI
 
-struct IncrementalSlider: View {
+public struct IncrementalSlider: View {
     
-    @Environment(\.colorScheme) var colorScheme
-    
-    let defaultValue: CGFloat
-    
+    @Environment(\.colorScheme) private var colorScheme
+        
     @Binding var relativeValue: CGFloat
+    let defaultValue: CGFloat
         
     var willChange: () -> ()
-    var didChangeRelativeValue: (CGFloat, CGFloat) -> ()
+    var didChange: (CGFloat, CGFloat) -> ()
 
     let relativeZero: CGFloat
     
     let relativeIncrement: CGFloat?
+    
+    /// Incremental Slider
+    public init(
+        value: Binding<CGFloat>,
+        default: CGFloat,
+        minimum: CGFloat = 0.0,
+        maximum: CGFloat = 1.0,
+        increment: CGFloat? = nil,
+        willChange: @escaping () -> Void = {},
+        didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
+    ) {
+        precondition(minimum < maximum, "Minimum must be less than maximum.")
+        let span: CGFloat = maximum - minimum
+        _relativeValue = Binding {
+            (value.wrappedValue - minimum) / span
+        } set: { newValue in
+            value.wrappedValue = newValue * span + minimum
+        }
+        self.defaultValue = (`default` - minimum) / span
+        self.willChange = willChange
+        self.didChange = { oldValue, newValue in
+            didChange(oldValue * span + minimum, newValue * span + minimum)
+        }
+        self.relativeZero = -minimum / span
+        self.relativeIncrement = if let increment {
+            increment / span
+        } else { nil }
+    }
+    
+    /// Incremental Slider
+    ///
+    /// The relative value is between `0.0` and `1.0`
+    init(
+        relativeValue: Binding<CGFloat>,
+        relativeDefault: CGFloat,
+        relativeZero: CGFloat = 0.0,
+        relativeIncrement: CGFloat? = nil,
+        willChange: @escaping () -> Void = {},
+        didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
+    ) {
+        _relativeValue = relativeValue
+        self.defaultValue = relativeDefault
+        self.willChange = willChange
+        self.didChange = didChange
+        self.relativeZero = relativeZero
+        self.relativeIncrement = relativeIncrement
+    }
+    
     private var incrementCount: Int {
         guard let increment: CGFloat = relativeIncrement else { return 1 }
         guard increment != 0.0 else { return 1 }
@@ -51,7 +98,7 @@ struct IncrementalSlider: View {
     @State private var atIncrementIndex: Int?
     @State private var startValue: CGFloat?
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 
@@ -167,7 +214,7 @@ struct IncrementalSlider: View {
             }
             .onEnded { _ in
                 if let startValue: CGFloat = startValue {
-                    didChangeRelativeValue(startValue, relativeValue)
+                    didChange(startValue, relativeValue)
                 }
                 isDragging = false
                 startValue = nil
@@ -206,72 +253,42 @@ struct IncrementalSlider: View {
 
 #Preview(traits: .fixedLayout(width: 200, height: 1000)) {
     @Previewable @State var value: CGFloat = 0.5
-    ScrollView {
-        Group {
-            Text("Live")
-                .bold()
-            IncrementalSlider(defaultValue: 0.5, relativeValue: $value, willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-        }
-        Divider()
-        Group {
-            Text("Zero at -0.5")
-                .bold()
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(-0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: -0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: -0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: -0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.5), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: -0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.75), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: -0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: -0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: -0.5, relativeIncrement: 0.25)
-        }
-        Divider()
-        Group {
-            Text("Zero at 0.0")
-                .bold()
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(-0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.5), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.75), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.0, relativeIncrement: 0.25)
-        }
-        Divider()
-        Group {
-            Text("Zero at 0.5")
-                .bold()
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(-0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.5), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.75), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 0.5, relativeIncrement: 0.25)
-        }
-        Divider()
-        Group {
-            Text("Zero at 1.0")
-                .bold()
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(-0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.5), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.75), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.0, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.0, relativeIncrement: 0.25)
-        }
-        Divider()
-        Group {
-            Text("Zero at 1.5")
-                .bold()
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(-0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.5), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(0.75), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.0), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.5, relativeIncrement: 0.25)
-            IncrementalSlider(defaultValue: 0.0, relativeValue: .constant(1.25), willChange: {}, didChangeRelativeValue: { _, _ in }, relativeZero: 1.5, relativeIncrement: 0.25)
-        }
-    }
+    IncrementalSlider(
+        value: $value,
+        default: 0.5,
+        minimum: 0.0,
+        maximum: 1.0,
+        increment: 0.25,
+        willChange: {},
+        didChange: { _, _ in }
+    )
+    .padding(10)
+}
+
+#Preview(traits: .fixedLayout(width: 200, height: 1000)) {
+    @Previewable @State var value: CGFloat = -0.5
+    IncrementalSlider(
+        value: $value,
+        default: 0.5,
+        minimum: 0.0,
+        maximum: 1.0,
+        increment: 0.25,
+        willChange: {},
+        didChange: { _, _ in }
+    )
+    .padding(10)
+}
+
+#Preview(traits: .fixedLayout(width: 200, height: 1000)) {
+    @Previewable @State var value: CGFloat = 1.5
+    IncrementalSlider(
+        value: $value,
+        default: 0.5,
+        minimum: -1.0,
+        maximum: 1.0,
+        increment: 0.25,
+        willChange: {},
+        didChange: { _, _ in }
+    )
     .padding(10)
 }

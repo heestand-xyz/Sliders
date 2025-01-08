@@ -9,37 +9,55 @@ import SwiftUI
 
 public struct CircleSliderMetadata: Sendable {
     struct Data: Sendable {
-        var point: CGPoint
         var startAngle: Angle
         var currentAngle: Angle
     }
     var isPressing: Bool = false
     var data: Data?
-    public static let zero: CircleSliderMetadata = .init()
+    var anchorPoint: CGPoint = .zero
+    public static let inactive: CircleSliderMetadata = .init()
     public init() {}
 }
 
-struct CircleSliderButton: View {
+public struct CircleSliderButton: View {
     
     @Binding var value: CGFloat
     let valueScale: CGFloat
+
+    @Binding var metadata: CircleSliderMetadata
+
+    let coordinateSpace: CoordinateSpace
+
     var didStart: () -> ()
     var didEnd: (CGFloat, CGFloat) -> ()
-    @Binding var metadata: CircleSliderMetadata
-    let coordinateSpace: CoordinateSpace
+    
+    init(
+        value: Binding<CGFloat>,
+        valueScale: CGFloat = 1.0,
+        metadata: Binding<CircleSliderMetadata>,
+        coordinateSpace: CoordinateSpace,
+        willChange: @escaping () -> Void = {},
+        didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in}
+    ) {
+        _value = value
+        self.valueScale = valueScale
+        _metadata = metadata
+        self.coordinateSpace = coordinateSpace
+        self.didStart = willChange
+        self.didEnd = didChange
+    }
     
     @State private var isPressing: Bool = false
     
     @State private var startValue: CGFloat?
     @State private var lastAngle: Angle?
-    @State private var point: CGPoint?
     
     @State private var changeCount: Int = 0
     @State private var timeoutTimer: Timer?
     
     @State private var gestureState = GestureState<Bool?>()
     
-    var body: some View {
+    public var body: some View {
         Group {
             if isPressing {
                 Circle()
@@ -57,8 +75,8 @@ struct CircleSliderButton: View {
         .onGeometryChange(for: CGPoint.self) { geometry in
             let frame = geometry.frame(in: coordinateSpace)
             return CGPoint(x: frame.midX, y: frame.midY)
-        } action: { newValue in
-            point = newValue
+        } action: { newPoint in
+            metadata.anchorPoint = newPoint
         }
         .frame(width: CircleSliderOverlay.thickness * 2,
                height: CircleSliderOverlay.thickness * 2)
@@ -72,7 +90,7 @@ struct CircleSliderButton: View {
             .onChanged { value in
                 let angle = Angle(radians: atan2(value.translation.height, value.translation.width))
                 if metadata.data == nil {
-                    metadata.data = CircleSliderMetadata.Data(point: point ?? .zero, startAngle: angle, currentAngle: .zero)
+                    metadata.data = CircleSliderMetadata.Data(startAngle: angle, currentAngle: .zero)
                     startValue = self.value
                     didStart()
                     timeoutTimer = Timer(timeInterval: 0.1, repeats: false, block: { _ in
@@ -166,14 +184,20 @@ public struct CircleSliderOverlay: View {
     }
     
     public var body: some View {
-        if let data: CircleSliderMetadata.Data = metadata.data {
-            mainBody(data: data)
-        } else if metadata.isPressing {
-            Color(white: colorScheme == .light ? 0.8 : 0.3)
-                .mask(circleWithHole())
-                .frame(width: Self.radius * 2,
-                       height: Self.radius * 2)
+        GeometryReader { geometry in
+            ZStack {
+                if let data: CircleSliderMetadata.Data = metadata.data {
+                    mainBody(data: data)
+                } else if metadata.isPressing {
+                    Color(white: colorScheme == .light ? 0.8 : 0.3)
+                        .mask(circleWithHole())
+                }
+            }
+            .offset(x: metadata.anchorPoint.x - geometry.frame(in: coordinateSpace).midX,
+                    y: metadata.anchorPoint.y - geometry.frame(in: coordinateSpace).midY)
         }
+        .frame(width: Self.radius * 2,
+               height: Self.radius * 2)
     }
     
     @ViewBuilder
@@ -189,40 +213,38 @@ public struct CircleSliderOverlay: View {
             startAngle + currentAngle
         }
         
-        GeometryReader { geometry in
-            ZStack {
-                /// Donut
-                Color(white: colorScheme == .light ? 0.8 : 0.3)
-                    .mask(circleWithHole())
-                /// Fill
-                Group {
-                    /// Arc
-                    CircleSliderArcShape(width: Self.thickness,
-                                         angle: narrow(angle: Angle(degrees: startAngle.degrees + angle.degrees) / 2.0),
-                                         length: Angle(degrees: abs(startAngle.degrees - angle.degrees)))
-                    /// Start Circle
-                    Circle()
-                        .frame(width: Self.thickness, height: Self.thickness)
-                        .offset(x: cos(startAngle.radians) * (Self.radius - Self.thickness / 2),
-                                y: sin(startAngle.radians) * (Self.radius - Self.thickness / 2))
-                }
-                .foregroundColor(.accentColor)
-                /// Current Circle
+        ZStack {
+            /// Donut
+            Color(white: colorScheme == .light ? 0.8 : 0.3)
+                .mask(circleWithHole())
+            /// Fill
+            Group {
+                /// Arc
+                CircleSliderArcShape(
+                    width: Self.thickness,
+                    angle: narrow(angle: Angle(degrees: startAngle.degrees + angle.degrees) / 2.0),
+                    length: Angle(degrees: abs(startAngle.degrees - angle.degrees))
+                )
+                /// Start Circle
                 Circle()
-                    .foregroundColor(.white)
-                    .overlay {
-                        Circle()
-                            .stroke()
-                            .opacity(0.2)
-                    }
                     .frame(width: Self.thickness, height: Self.thickness)
-                    .offset(x: cos(angle.radians) * (Self.radius - Self.thickness / 2),
-                            y: sin(angle.radians) * (Self.radius - Self.thickness / 2))
+                    .offset(x: cos(startAngle.radians) * (Self.radius - Self.thickness / 2),
+                            y: sin(startAngle.radians) * (Self.radius - Self.thickness / 2))
             }
-            .compositingGroup()
+            .foregroundColor(.accentColor)
+            /// Current Circle
+            Circle()
+                .foregroundColor(.white)
+                .overlay {
+                    Circle()
+                        .stroke()
+                        .opacity(0.2)
+                }
+                .frame(width: Self.thickness, height: Self.thickness)
+                .offset(x: cos(angle.radians) * (Self.radius - Self.thickness / 2),
+                        y: sin(angle.radians) * (Self.radius - Self.thickness / 2))
         }
-        .frame(width: Self.radius * 2,
-               height: Self.radius * 2)
+        .compositingGroup()
     }
     
     private func circleWithHole() -> some View {
@@ -283,24 +305,22 @@ struct CircleSliderArcShape: Shape {
 
 #Preview(traits: .fixedLayout(width: 200, height: 200)) {
     @Previewable @State var value: CGFloat = 0.0
-    @Previewable @State var metadata: CircleSliderMetadata = .zero
-    let coordinateSpace: CoordinateSpace = .named("preview")
-    ZStack(alignment: .topLeading) {
+    @Previewable @State var metadata: CircleSliderMetadata = .inactive
+    let coordinateSpaceName: String = "circle-slider"
+    ZStack {
         CircleSliderButton(
             value: $value,
             valueScale: 1.0,
-            didStart: {},
-            didEnd: { _, _ in },
             metadata: $metadata,
-            coordinateSpace: coordinateSpace
+            coordinateSpace: .named(coordinateSpaceName),
+            willChange: {},
+            didChange: { _, _ in }
         )
-    }
-    .overlay {
         CircleSliderOverlay(
             metadata: metadata,
-            coordinateSpace: coordinateSpace
+            coordinateSpace: .named(coordinateSpaceName)
         )
     }
     .frame(width: 200, height: 200)
-    .coordinateSpace(name: "preview")
+    .coordinateSpace(name: coordinateSpaceName)
 }
