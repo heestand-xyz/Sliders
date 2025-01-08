@@ -1,0 +1,3 @@
+# Sliders
+
+## Incremental Slider
