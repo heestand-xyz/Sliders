@@ -14,6 +14,8 @@
 
 <img src="https://github.com/heestand-xyz/Sliders/blob/main/Assets/IncrementalSlider1.png" width="397"/>
 
+> Haptic feedback is run when the slider passes over an increment.
+
 ```swift
 @State var value: CGFloat = 0.5
 
