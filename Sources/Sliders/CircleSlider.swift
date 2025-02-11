@@ -7,19 +7,37 @@
 
 import SwiftUI
 
-public struct CircleSliderMetadata: Sendable {
-    struct Data: Sendable {
+public struct CircleSliderMetadata: Equatable, Sendable {
+    struct Data: Equatable, Sendable {
+        let id: String
         var startAngle: Angle
         var currentAngle: Angle
     }
-    var isPressing: Bool = false
+    public internal(set) var pressID: String?
+    var isPressing: Bool {
+        pressID != nil
+    }
+    var id: String? {
+        data?.id ?? pressID
+    }
     var data: Data?
-    var anchorPoint: CGPoint = .zero
+    var anchorPoints: [String: CGPoint] = [:]
+    var anchorPoint: CGPoint? {
+        guard let id else { return nil }
+        return anchorPoints[id]
+    }
     public static let inactive: CircleSliderMetadata = .init()
+    public static func press(id: String) -> CircleSliderMetadata {
+        var metadata = CircleSliderMetadata()
+        metadata.pressID = id
+        return metadata
+    }
     public init() {}
 }
 
 public struct CircleSliderButton: View {
+    
+    let id: String
     
     @Binding var value: CGFloat
     let valueScale: CGFloat
@@ -31,7 +49,8 @@ public struct CircleSliderButton: View {
     var didStart: () -> ()
     var didEnd: (CGFloat, CGFloat) -> ()
     
-    init(
+    public init(
+        id: String,
         value: Binding<CGFloat>,
         valueScale: CGFloat = 1.0,
         metadata: Binding<CircleSliderMetadata>,
@@ -39,6 +58,7 @@ public struct CircleSliderButton: View {
         willChange: @escaping () -> Void = {},
         didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in}
     ) {
+        self.id = id
         _value = value
         self.valueScale = valueScale
         _metadata = metadata
@@ -52,8 +72,8 @@ public struct CircleSliderButton: View {
     @State private var startValue: CGFloat?
     @State private var lastAngle: Angle?
     
-    @State private var changeCount: Int = 0
-    @State private var timeoutTimer: Timer?
+//    @State private var changeCount: Int = 0
+//    @State private var timeoutTimer: Timer?
     
     @State private var gestureState = GestureState<Bool?>()
     
@@ -70,19 +90,19 @@ public struct CircleSliderButton: View {
         }
         .frame(width: CircleSliderOverlay.thickness,
                height: CircleSliderOverlay.thickness)
-        .opacity(metadata.data != nil ? 0.0 : 1.0)
-        .zIndex(10)
+        .opacity(metadata.data?.id == id ? 0.0 : 1.0)
         .onGeometryChange(for: CGPoint.self) { geometry in
             let frame = geometry.frame(in: coordinateSpace)
             return CGPoint(x: frame.midX, y: frame.midY)
         } action: { newPoint in
-            metadata.anchorPoint = newPoint
+            metadata.anchorPoints[id] = newPoint
         }
         .frame(width: CircleSliderOverlay.thickness * 2,
                height: CircleSliderOverlay.thickness * 2)
         .contentShape(.circle)
         .gesture(dragGesture)
         .simultaneousGesture(pressGesture)
+        .accessibilityLabel("Circle Slider")
     }
     
     private var dragGesture: some Gesture {
@@ -90,37 +110,42 @@ public struct CircleSliderButton: View {
             .onChanged { value in
                 let angle = Angle(radians: atan2(value.translation.height, value.translation.width))
                 if metadata.data == nil {
-                    metadata.data = CircleSliderMetadata.Data(startAngle: angle, currentAngle: .zero)
+                    metadata.data = CircleSliderMetadata.Data(id: id, startAngle: angle, currentAngle: .zero)
                     startValue = self.value
                     didStart()
-                    timeoutTimer = Timer(timeInterval: 0.1, repeats: false, block: { _ in
-                        Task { @MainActor in
-                            guard changeCount == 1 else { return }
-                            metadata.data = nil
-                            lastAngle = nil
-                            changeCount = 0
-                            timeoutTimer = nil
-                        }
-                    })
-                    RunLoop.current.add(timeoutTimer!, forMode: .common)
-                } else if metadata.data != nil, lastAngle != nil {
-                    let relativeAngle = narrow(angle: angle - lastAngle!)
-                    metadata.data!.currentAngle += relativeAngle
-                    self.value += (relativeAngle.degrees / 360) * valueScale
+//                    timeoutTimer = Timer(timeInterval: 0.1, repeats: false, block: { _ in
+//                        Task { @MainActor in
+//                            guard changeCount == 1 else { return }
+//                            metadata.data = nil
+//                            lastAngle = nil
+//                            changeCount = 0
+//                            timeoutTimer = nil
+//                        }
+//                    })
+//                    RunLoop.current.add(timeoutTimer!, forMode: .common)
+                } else if let data = metadata.data, lastAngle != nil, let startValue {
+                    guard data.id == id else { return }
+                    let relativeAngle: Angle = narrow(angle: angle - lastAngle!)
+                    let currentAngle: Angle = metadata.data!.currentAngle + relativeAngle
+                    metadata.data!.currentAngle = currentAngle
+                    self.value = startValue + (currentAngle.degrees / 360) * valueScale
                 }
+                guard metadata.data?.id == id else { return }
                 lastAngle = angle
-                changeCount += 1
+//                changeCount += 1
             }
             .onEnded { _ in
-                if metadata.data != nil, let startValue: CGFloat = startValue {
-                    let value: CGFloat = (metadata.data!.currentAngle.degrees / 360) * valueScale
+                guard let data = metadata.data, data.id == id else { return }
+                if let startValue: CGFloat = startValue {
+                    let value: CGFloat = (data.currentAngle.degrees / 360) * valueScale
                     didEnd(startValue, value)
                 }
                 metadata.data = nil
+                startValue = nil
                 lastAngle = nil
-                changeCount = 0
-                timeoutTimer?.invalidate()
-                timeoutTimer = nil
+//                changeCount = 0
+//                timeoutTimer?.invalidate()
+//                timeoutTimer = nil
             }
     }
     
@@ -129,12 +154,14 @@ public struct CircleSliderButton: View {
             .onChanged { value in
                 if !isPressing {
                     isPressing = true
-                    metadata.isPressing = true
+                    metadata.pressID = id
                 }
             }
             .onEnded { _ in
                 isPressing = false
-                metadata.isPressing = false
+                if metadata.pressID == id {
+                    metadata.pressID = nil
+                }
             }
     }
     
@@ -185,16 +212,18 @@ public struct CircleSliderOverlay: View {
     
     public var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                if let data: CircleSliderMetadata.Data = metadata.data {
-                    mainBody(data: data)
-                } else if metadata.isPressing {
-                    Color(white: colorScheme == .light ? 0.8 : 0.3)
-                        .mask(circleWithHole())
+            if let anchorPoint: CGPoint = metadata.anchorPoint {
+                ZStack {
+                    if let data: CircleSliderMetadata.Data = metadata.data {
+                        mainBody(data: data)
+                    } else if metadata.isPressing {
+                        Color(white: colorScheme == .light ? 0.8 : 0.3)
+                            .mask(circleWithHole())
+                    }
                 }
+                .offset(x: anchorPoint.x - geometry.frame(in: coordinateSpace).midX,
+                        y: anchorPoint.y - geometry.frame(in: coordinateSpace).midY)
             }
-            .offset(x: metadata.anchorPoint.x - geometry.frame(in: coordinateSpace).midX,
-                    y: metadata.anchorPoint.y - geometry.frame(in: coordinateSpace).midY)
         }
         .frame(width: Self.radius * 2,
                height: Self.radius * 2)
@@ -258,8 +287,8 @@ public struct CircleSliderOverlay: View {
                         .padding(Self.thickness)
                 )
         }
-            .compositingGroup()
-            .luminanceToAlpha()
+        .compositingGroup()
+        .luminanceToAlpha()
     }
     
     private func narrow(angle: Angle) -> Angle {
@@ -309,6 +338,7 @@ struct CircleSliderArcShape: Shape {
     let coordinateSpaceName: String = "circle-slider"
     ZStack {
         CircleSliderButton(
+            id: "first",
             value: $value,
             valueScale: 1.0,
             metadata: $metadata,

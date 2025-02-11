@@ -94,6 +94,7 @@ public struct IncrementalSlider: View {
         barHeight * 0.75
     }
     
+    @State private var attemptedDragging: Bool = false
     @State private var isDragging: Bool = false
     @State private var atIncrementIndex: Int?
     @State private var startValue: CGFloat?
@@ -118,7 +119,7 @@ public struct IncrementalSlider: View {
                         .frame(width: abs(min(max(relativeZero, 0.0), 1.0) - min(max(relativeValue, 0.0), 1.0)) * (geometry.size.width - circleRadius * 2))
                         .offset(x: min(max(min(relativeZero, relativeValue), 0.0), 1.0) * (geometry.size.width - circleRadius * 2))
                         .foregroundColor(.accentColor)
-                        .frame(width: (geometry.size.width - circleRadius * 2), alignment: .leading)
+                        .frame(width: max(0, geometry.size.width - circleRadius * 2), alignment: .leading)
                         .mask(
                             HStack(spacing: 0.0) {
                                 ForEach(0..<incrementCount, id: \.self) { _ in
@@ -134,12 +135,26 @@ public struct IncrementalSlider: View {
                 
                 circleContainer(size: geometry.size)
             }
-            .gesture(dragGesture(size: geometry.size))
+            .simultaneousGesture(dragGesture(size: geometry.size))
         }
         .frame(height: circleRadius * 2)
         .padding(1)
         .onTapGesture(count: 2) {
             relativeValue = defaultValue
+        }
+        .accessibilityLabel("Incremental Slider")
+        .accessibilityValue("\(String(format: "%.2f", Int(relativeValue * 100)))%")
+        .accessibilityAction(named: "Reset to Default") {
+            relativeValue = defaultValue
+        }
+        .accessibilityAction(named: "Set to Minimum") {
+            relativeValue = 0.0
+        }
+        .accessibilityAction(named: "Set to Maximum") {
+            relativeValue = 1.0
+        }
+        .accessibilityAction(named: "Set to Zero") {
+            relativeValue = relativeZero
         }
     }
     
@@ -192,12 +207,18 @@ public struct IncrementalSlider: View {
     private func dragGesture(size: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
-                if !isDragging {
-                    guard abs(value.translation.width) > 10 else { return }
+                defer {
+                    if !attemptedDragging {
+                        attemptedDragging = true
+                    }
+                }
+                if !isDragging, !attemptedDragging {
+                    guard abs(value.translation.width) > 10, abs(value.translation.height) < 10 else { return }
                     startValue = relativeValue
                     isDragging = true
                     willChange()
                 }
+                guard isDragging else { return }
                 var value: CGFloat = (value.location.x - circleRadius) / (size.width - circleRadius * 2)
                 value = min(max(value, 0.0), 1.0)
                 if let incrementIndex: Int = findIncrementIndex(value) {
@@ -213,6 +234,8 @@ public struct IncrementalSlider: View {
                 }
             }
             .onEnded { _ in
+                attemptedDragging = false
+                guard isDragging else { return }
                 if let startValue: CGFloat = startValue {
                     didChange(startValue, relativeValue)
                 }
@@ -227,13 +250,15 @@ public struct IncrementalSlider: View {
     
     private func setIncrement(index: Int) {
         relativeValue = incrementValue(index: index)
+        Task { @MainActor in
 #if os(macOS)
-        NSHapticFeedbackManager.defaultPerformer
-            .perform(.generic, performanceTime: .now)
+            NSHapticFeedbackManager.defaultPerformer
+                .perform(.generic, performanceTime: .now)
 #elseif os(iOS)
-        UIImpactFeedbackGenerator(style: .light)
-            .impactOccurred()
+            UIImpactFeedbackGenerator(style: .light)
+                .impactOccurred()
 #endif
+        }
     }
     
     private func findIncrementIndex(_ value: CGFloat) -> Int? {
