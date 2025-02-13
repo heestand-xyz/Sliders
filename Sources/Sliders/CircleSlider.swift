@@ -83,9 +83,13 @@ public struct CircleSliderButton: View {
                 Circle()
                     .foregroundColor(.white)
             } else {
-                Circle()
-                    .subtracting(Circle().inset(by: CircleSliderOverlay.thickness / 4))
-                    .foregroundColor(.accentColor)
+                ZStack {
+                    Circle()
+                        .foregroundColor(.accentColor)
+                    Circle()
+                        .foregroundStyle(.white)
+                        .padding(CircleSliderOverlay.thickness / 4)
+                }
             }
         }
         .frame(width: CircleSliderOverlay.thickness,
@@ -217,7 +221,12 @@ public struct CircleSliderOverlay: View {
                     if let data: CircleSliderMetadata.Data = metadata.data {
                         mainBody(data: data)
                     } else if metadata.isPressing {
-                        Color(white: colorScheme == .light ? 0.8 : 0.3)
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay {
+                                Circle()
+                                    .opacity(0.1)
+                            }
                             .mask(circleWithHole())
                     }
                 }
@@ -244,7 +253,12 @@ public struct CircleSliderOverlay: View {
         
         ZStack {
             /// Donut
-            Color(white: colorScheme == .light ? 0.8 : 0.3)
+            Circle()
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Circle()
+                        .opacity(0.1)
+                }
                 .mask(circleWithHole())
             /// Fill
             Group {

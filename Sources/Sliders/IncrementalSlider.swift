@@ -140,21 +140,21 @@ public struct IncrementalSlider: View {
         .frame(height: circleRadius * 2)
         .padding(1)
         .onTapGesture(count: 2) {
-            relativeValue = defaultValue
+            update(value: defaultValue)
         }
         .accessibilityLabel("Incremental Slider")
         .accessibilityValue("\(String(format: "%.2f", Int(relativeValue * 100)))%")
         .accessibilityAction(named: "Reset to Default") {
-            relativeValue = defaultValue
+            update(value: defaultValue)
         }
         .accessibilityAction(named: "Set to Minimum") {
-            relativeValue = 0.0
+            update(value: 0.0)
         }
         .accessibilityAction(named: "Set to Maximum") {
-            relativeValue = 1.0
+            update(value: 1.0)
         }
         .accessibilityAction(named: "Set to Zero") {
-            relativeValue = relativeZero
+            update(value: relativeZero)
         }
     }
     
@@ -244,12 +244,24 @@ public struct IncrementalSlider: View {
             }
     }
     
+    private func update(value: CGFloat) {
+        let oldValue = relativeValue
+        willChange()
+        set(value: value)
+        didChange(oldValue, value)
+        haptic()
+    }
+    
     private func set(value: CGFloat) {
         relativeValue = value
     }
     
     private func setIncrement(index: Int) {
         relativeValue = incrementValue(index: index)
+        haptic()
+    }
+                  
+    private func haptic() {
         Task { @MainActor in
 #if os(macOS)
             NSHapticFeedbackManager.defaultPerformer
