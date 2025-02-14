@@ -229,6 +229,14 @@ public struct CircleSliderOverlay: View {
                             }
                             .mask(circleWithHole())
                     }
+                    Group {
+                        Circle()
+                            .stroke()
+                        Circle()
+                            .stroke()
+                            .padding(Self.thickness)
+                    }
+                    .opacity(0.2)
                 }
                 .offset(x: anchorPoint.x - geometry.frame(in: coordinateSpace).midX,
                         y: anchorPoint.y - geometry.frame(in: coordinateSpace).midY)
