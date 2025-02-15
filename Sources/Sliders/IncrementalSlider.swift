@@ -31,20 +31,23 @@ public struct IncrementalSlider: View {
         willChange: @escaping () -> Void = {},
         didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
     ) {
-        precondition(minimum < maximum, "Minimum must be less than maximum.")
         let span: CGFloat = maximum - minimum
         _relativeValue = Binding {
-            (value.wrappedValue - minimum) / span
+            guard span != 0.0 else { return 0.0 }
+            return (value.wrappedValue - minimum) / span
         } set: { newValue in
             value.wrappedValue = newValue * span + minimum
         }
-        self.defaultValue = (`default` - minimum) / span
+        self.defaultValue = {
+            guard span != 0.0 else { return 0.0 }
+            return (`default` - minimum) / span
+        }()
         self.willChange = willChange
         self.didChange = { oldValue, newValue in
             didChange(oldValue * span + minimum, newValue * span + minimum)
         }
         self.relativeZero = -minimum / span
-        self.relativeIncrement = if let increment {
+        self.relativeIncrement = if let increment, span != 0.0 {
             increment / span
         } else { nil }
     }
@@ -139,6 +142,7 @@ public struct IncrementalSlider: View {
         }
         .frame(height: circleRadius * 2)
         .padding(1)
+        .compositingGroup()
         .onTapGesture(count: 2) {
             update(value: defaultValue)
         }
