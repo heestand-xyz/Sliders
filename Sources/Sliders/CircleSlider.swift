@@ -44,7 +44,7 @@ public struct CircleSliderButton: View {
 
     @Binding var metadata: CircleSliderMetadata
 
-    let coordinateSpace: CoordinateSpace
+    let coordinateSpaceName: String
 
     var didStart: () -> ()
     var didEnd: (CGFloat, CGFloat) -> ()
@@ -54,7 +54,7 @@ public struct CircleSliderButton: View {
         value: Binding<CGFloat>,
         valueScale: CGFloat = 1.0,
         metadata: Binding<CircleSliderMetadata>,
-        coordinateSpace: CoordinateSpace,
+        coordinateSpaceName: String,
         willChange: @escaping () -> Void = {},
         didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in}
     ) {
@@ -62,7 +62,7 @@ public struct CircleSliderButton: View {
         _value = value
         self.valueScale = valueScale
         _metadata = metadata
-        self.coordinateSpace = coordinateSpace
+        self.coordinateSpaceName = coordinateSpaceName
         self.didStart = willChange
         self.didEnd = didChange
     }
@@ -96,7 +96,7 @@ public struct CircleSliderButton: View {
                height: CircleSliderOverlay.thickness)
         .opacity(metadata.data?.id == id ? 0.0 : 1.0)
         .onGeometryChange(for: CGPoint.self) { geometry in
-            let frame = geometry.frame(in: coordinateSpace)
+            let frame = geometry.frame(in: .named(coordinateSpaceName))
             return CGPoint(x: frame.midX, y: frame.midY)
         } action: { newPoint in
             metadata.anchorPoints[id] = newPoint
@@ -189,14 +189,14 @@ public struct CircleSliderOverlay: View {
     @Environment(\.colorScheme) private var colorScheme
     
     let metadata: CircleSliderMetadata
-    let coordinateSpace: CoordinateSpace
+    let coordinateSpaceName: String
     
     public init(
         metadata: CircleSliderMetadata,
-        coordinateSpace: CoordinateSpace
+        coordinateSpaceName: String
     ) {
         self.metadata = metadata
-        self.coordinateSpace = coordinateSpace
+        self.coordinateSpaceName = coordinateSpaceName
     }
 
     static var radius: CGFloat {
@@ -238,8 +238,8 @@ public struct CircleSliderOverlay: View {
                     }
                     .opacity(0.2)
                 }
-                .offset(x: anchorPoint.x - geometry.frame(in: coordinateSpace).midX,
-                        y: anchorPoint.y - geometry.frame(in: coordinateSpace).midY)
+                .offset(x: anchorPoint.x - geometry.frame(in: .named(coordinateSpaceName)).midX,
+                        y: anchorPoint.y - geometry.frame(in: .named(coordinateSpaceName)).midY)
             }
         }
         .frame(width: Self.radius * 2,
@@ -364,13 +364,13 @@ struct CircleSliderArcShape: Shape {
             value: $value,
             valueScale: 1.0,
             metadata: $metadata,
-            coordinateSpace: .named(coordinateSpaceName),
+            coordinateSpaceName: coordinateSpaceName,
             willChange: {},
             didChange: { _, _ in }
         )
         CircleSliderOverlay(
             metadata: metadata,
-            coordinateSpace: .named(coordinateSpaceName)
+            coordinateSpaceName: coordinateSpaceName
         )
     }
     .frame(width: 200, height: 200)
