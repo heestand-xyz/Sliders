@@ -9,6 +9,14 @@ import SwiftUI
 
 public struct IncrementalSlider: View {
     
+    private static let coordinateSpaceName: String = "incremental-slider"
+    private static let hitAreaPadding = EdgeInsets(
+        top: 8,
+        leading: 16,
+        bottom: 8,
+        trailing: 16
+    )
+    
     @Environment(\.colorScheme) private var colorScheme
         
     @Binding var relativeValue: CGFloat
@@ -97,50 +105,29 @@ public struct IncrementalSlider: View {
         barHeight * 0.75
     }
     
-    @State private var attemptedDragging: Bool = false
     @State private var isDragging: Bool = false
     @State private var atIncrementIndex: Int?
-    @State private var startValue: CGFloat?
+    @State private var relativeStartValue: CGFloat?
 
     public var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
-                
-                Color(white: 0.5, opacity: 0.001)
-                
-                ZStack(alignment: .leading) {
-                    
-                    HStack(spacing: 0.0) {
-                        ForEach(0..<incrementCount, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: barHeight / 2)
-                                .opacity(0.1)
-                                .padding(.horizontal, incrementSpacing / 2)
-                        }
-                    }
-                    
-                    Rectangle()
-                        .frame(width: abs(min(max(relativeZero, 0.0), 1.0) - min(max(relativeValue, 0.0), 1.0)) * (geometry.size.width - circleRadius * 2))
-                        .offset(x: min(max(min(relativeZero, relativeValue), 0.0), 1.0) * (geometry.size.width - circleRadius * 2))
-                        .foregroundColor(.accentColor)
-                        .frame(width: max(0, geometry.size.width - circleRadius * 2), alignment: .leading)
-                        .mask(
-                            HStack(spacing: 0.0) {
-                                ForEach(0..<incrementCount, id: \.self) { _ in
-                                    RoundedRectangle(cornerRadius: barHeight / 2)
-                                        .padding(.horizontal, incrementSpacing / 2)
-                                }
-                            }
-                        )
-                    
-                }
-                .frame(height: barHeight)
-                .padding(.horizontal, circleRadius)
-                
+                Color.clear
+                barContainer(size: geometry.size)
+                    .padding(.horizontal, circleRadius)
                 circleContainer(size: geometry.size)
+                    .offset(x: fixedValue(from: relativeValue, at: geometry.size))
+                Color.clear
+                    .aspectRatio(1, contentMode: .fit)
+                    .padding(Self.hitAreaPadding)
+                    .contentShape(.capsule)
+                    .gesture(dragGesture(size: geometry.size))
+                    .padding(-Self.hitAreaPadding)
+                    .offset(x: fixedValue(from: relativeStartValue ?? relativeValue, at: geometry.size))
             }
-            .simultaneousGesture(dragGesture(size: geometry.size))
         }
         .frame(height: circleRadius * 2)
+        .coordinateSpace(name: Self.coordinateSpaceName)
         .padding(1)
         .compositingGroup()
         .onTapGesture(count: 2) {
@@ -162,6 +149,39 @@ public struct IncrementalSlider: View {
         }
     }
     
+    private func fixedValue(from relativeValue: CGFloat, at size: CGSize) -> CGFloat {
+        min(max(relativeValue, 0.0), 1.0) * (size.width - circleRadius * 2)
+    }
+    
+    private func barContainer(size: CGSize) -> some View {
+        ZStack(alignment: .leading) {
+            
+            HStack(spacing: 0.0) {
+                ForEach(0..<incrementCount, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: barHeight / 2)
+                        .opacity(0.1)
+                        .padding(.horizontal, incrementSpacing / 2)
+                }
+            }
+            
+            Rectangle()
+                .frame(width: max(0, abs(min(max(relativeZero, 0.0), 1.0) - min(max(relativeValue, 0.0), 1.0)) * (size.width - circleRadius * 2)))
+                .offset(x: min(max(min(relativeZero, relativeValue), 0.0), 1.0) * (size.width - circleRadius * 2))
+                .foregroundColor(.accentColor)
+                .frame(width: max(0, size.width - circleRadius * 2), alignment: .leading)
+                .mask(
+                    HStack(spacing: 0.0) {
+                        ForEach(0..<incrementCount, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: barHeight / 2)
+                                .padding(.horizontal, incrementSpacing / 2)
+                        }
+                    }
+                )
+            
+        }
+        .frame(height: barHeight)
+    }
+    
     private func circleContainer(size: CGSize) -> some View {
         Group {
             if isDragging {
@@ -173,9 +193,7 @@ public struct IncrementalSlider: View {
 #endif
             }
         }
-        .frame(width: circleRadius * 2,
-               height: circleRadius * 2)
-        .offset(x: min(max(relativeValue, 0.0), 1.0) * (size.width - circleRadius * 2))
+        .frame(width: circleRadius * 2, height: circleRadius * 2)
     }
     
     private var circleContent: some View {
@@ -209,20 +227,13 @@ public struct IncrementalSlider: View {
     }
     
     private func dragGesture(size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 10)
+        DragGesture(coordinateSpace: .named(Self.coordinateSpaceName))
             .onChanged { value in
-                defer {
-                    if !attemptedDragging {
-                        attemptedDragging = true
-                    }
-                }
-                if !isDragging, !attemptedDragging {
-                    guard abs(value.translation.width) > 10, abs(value.translation.height) < 10 else { return }
-                    startValue = relativeValue
+                if !isDragging {
+                    relativeStartValue = relativeValue
                     isDragging = true
                     willChange()
                 }
-                guard isDragging else { return }
                 var value: CGFloat = (value.location.x - circleRadius) / (size.width - circleRadius * 2)
                 value = min(max(value, 0.0), 1.0)
                 if let incrementIndex: Int = findIncrementIndex(value) {
@@ -238,13 +249,11 @@ public struct IncrementalSlider: View {
                 }
             }
             .onEnded { _ in
-                attemptedDragging = false
-                guard isDragging else { return }
-                if let startValue: CGFloat = startValue {
-                    didChange(startValue, relativeValue)
+                if let relativeStartValue: CGFloat {
+                    didChange(relativeStartValue, relativeValue)
                 }
                 isDragging = false
-                startValue = nil
+                relativeStartValue = nil
             }
     }
     
