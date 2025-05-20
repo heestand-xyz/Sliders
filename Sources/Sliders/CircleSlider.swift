@@ -72,9 +72,6 @@ public struct CircleSliderButton: View {
     @State private var startValue: CGFloat?
     @State private var lastAngle: Angle?
     
-//    @State private var changeCount: Int = 0
-//    @State private var timeoutTimer: Timer?
-    
     @State private var gestureState = GestureState<Bool?>()
     
     public var body: some View {
@@ -117,16 +114,6 @@ public struct CircleSliderButton: View {
                     metadata.data = CircleSliderMetadata.Data(id: id, startAngle: angle, currentAngle: .zero)
                     startValue = self.value
                     didStart()
-//                    timeoutTimer = Timer(timeInterval: 0.1, repeats: false, block: { _ in
-//                        Task { @MainActor in
-//                            guard changeCount == 1 else { return }
-//                            metadata.data = nil
-//                            lastAngle = nil
-//                            changeCount = 0
-//                            timeoutTimer = nil
-//                        }
-//                    })
-//                    RunLoop.current.add(timeoutTimer!, forMode: .common)
                 } else if let data = metadata.data, lastAngle != nil, let startValue {
                     guard data.id == id else { return }
                     let relativeAngle: Angle = narrow(angle: angle - lastAngle!)
@@ -136,7 +123,6 @@ public struct CircleSliderButton: View {
                 }
                 guard metadata.data?.id == id else { return }
                 lastAngle = angle
-//                changeCount += 1
             }
             .onEnded { _ in
                 guard let data = metadata.data, data.id == id else { return }
@@ -147,9 +133,6 @@ public struct CircleSliderButton: View {
                 metadata.data = nil
                 startValue = nil
                 lastAngle = nil
-//                changeCount = 0
-//                timeoutTimer?.invalidate()
-//                timeoutTimer = nil
             }
     }
     
