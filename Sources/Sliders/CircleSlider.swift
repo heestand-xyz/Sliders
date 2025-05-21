@@ -98,11 +98,11 @@ public struct CircleSliderButton: View {
         } action: { newPoint in
             metadata.anchorPoints[id] = newPoint
         }
-        .frame(width: CircleSliderOverlay.thickness * 2,
-               height: CircleSliderOverlay.thickness * 2)
+        .padding(8)
         .contentShape(.circle)
         .gesture(dragGesture)
         .simultaneousGesture(pressGesture)
+        .padding(-8)
         .accessibilityLabel("Circle Slider")
     }
     
