@@ -134,7 +134,7 @@ public struct IncrementalSlider: View {
             update(value: defaultValue)
         }
         .accessibilityLabel("Incremental Slider")
-        .accessibilityValue("\(String(format: "%.2f", Int(relativeValue * 100)))%")
+        .accessibilityValue("\(Int(relativeValue * 100))%")
         .accessibilityAction(named: "Reset to Default") {
             update(value: defaultValue)
         }
