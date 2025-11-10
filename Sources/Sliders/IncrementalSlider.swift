@@ -128,13 +128,14 @@ public struct IncrementalSlider: View {
         barHeight * 0.75
     }
     
+    @State private var isHovering: Bool = false
     @State private var isDragging: Bool = false
     @State private var isEarlyDragging: Bool = false
     @State private var atIncrementIndex: Int?
     @State private var relativeStartValue: CGFloat?
     
     private var expand: Bool {
-        isEarlyDragging || isDragging || hint
+        isEarlyDragging || isDragging || hint || isHovering
     }
 
     public var body: some View {
@@ -153,6 +154,12 @@ public struct IncrementalSlider: View {
                     .simultaneousGesture(earlyDragGesture())
                     .padding(-Self.hitAreaPadding)
                     .offset(x: fixedValue(from: relativeStartValue ?? relativeValue, at: geometry.size))
+                Color.clear
+                    .frame(width: headSize.width, height: headSize.height)
+                    .onHover { active in
+                        isHovering = active
+                    }
+                    .offset(x: fixedValue(from: relativeValue, at: geometry.size))
             }
         }
         .frame(height: headSize.height)
@@ -188,7 +195,7 @@ public struct IncrementalSlider: View {
             HStack(spacing: 0.0) {
                 ForEach(0..<incrementCount, id: \.self) { _ in
                     RoundedRectangle(cornerRadius: barHeight / 2)
-                        .opacity(0.25)
+                        .opacity(0.35)
                         .padding(.horizontal, incrementSpacing / 2)
                 }
             }

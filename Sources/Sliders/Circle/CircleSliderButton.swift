@@ -39,6 +39,7 @@ public struct CircleSliderButton: View {
         self.didEnd = didChange
     }
     
+    @State private var isHovering: Bool = false
     @State private var isPressing: Bool = false
     
     @State private var startValue: CGFloat?
@@ -57,7 +58,8 @@ public struct CircleSliderButton: View {
                         .foregroundColor(.accentColor)
                     Circle()
                         .foregroundStyle(.white)
-                        .padding(CircleSliderOverlay.thickness / 4)
+                        .padding(isHovering ? CircleSliderOverlay.thickness / 6 : CircleSliderOverlay.thickness / 4)
+                        .animation(.easeInOut(duration: 0.1), value: isHovering)
                 }
             }
         }
@@ -74,6 +76,9 @@ public struct CircleSliderButton: View {
         .contentShape(.circle)
         .gesture(dragGesture)
         .simultaneousGesture(pressGesture)
+        .onHover { active in
+            isHovering = active
+        }
         .padding(-8)
         .accessibilityLabel("Circle Slider")
     }
