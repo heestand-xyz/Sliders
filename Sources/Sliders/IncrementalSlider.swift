@@ -29,6 +29,8 @@ public struct IncrementalSlider: View {
     
     let relativeIncrement: CGFloat?
     
+    let hint: Bool
+    
     /// Incremental Slider
     public init(
         value: Binding<CGFloat>,
@@ -36,6 +38,7 @@ public struct IncrementalSlider: View {
         minimum: CGFloat = 0.0,
         maximum: CGFloat = 1.0,
         increment: CGFloat? = nil,
+        hint: Bool = false,
         willChange: @escaping () -> Void = {},
         didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
     ) {
@@ -58,6 +61,7 @@ public struct IncrementalSlider: View {
         self.relativeIncrement = if let increment, span != 0.0 {
             increment / span
         } else { nil }
+        self.hint = hint
     }
     
     /// Incremental Slider
@@ -68,6 +72,7 @@ public struct IncrementalSlider: View {
         relativeDefault: CGFloat,
         relativeZero: CGFloat = 0.0,
         relativeIncrement: CGFloat? = nil,
+        hint: Bool = false,
         willChange: @escaping () -> Void = {},
         didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
     ) {
@@ -77,6 +82,7 @@ public struct IncrementalSlider: View {
         self.didChange = didChange
         self.relativeZero = relativeZero
         self.relativeIncrement = relativeIncrement
+        self.hint = hint
     }
     
     private var incrementCount: Int {
@@ -89,44 +95,67 @@ public struct IncrementalSlider: View {
     
     private var barHeight: CGFloat {
 #if os(macOS)
-        4
-#else
         5
+#else
+        6
 #endif
     }
-    private var circleRadius: CGFloat {
+    private var headHeight: CGFloat {
 #if os(macOS)
-        10
+        18
 #else
-        15
+        25
 #endif
+    }
+    private var headAspectRatio: CGFloat {
+#if os(macOS)
+        1.25
+#else
+        1.5
+#endif
+    }
+    private var headLiftPadding: CGFloat {
+#if os(macOS)
+        1
+#else
+        3
+#endif
+    }
+    private var headSize: CGSize {
+        CGSize(width: headHeight * headAspectRatio, height: headHeight)
     }
     private var incrementSpacing: CGFloat {
         barHeight * 0.75
     }
     
     @State private var isDragging: Bool = false
+    @State private var isEarlyDragging: Bool = false
     @State private var atIncrementIndex: Int?
     @State private var relativeStartValue: CGFloat?
+    
+    private var expand: Bool {
+        isEarlyDragging || isDragging || hint
+    }
 
     public var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Color.clear
                 barContainer(size: geometry.size)
-                    .padding(.horizontal, circleRadius)
-                circleContainer(size: geometry.size)
+                    .padding(.horizontal, headSize.width / 2)
+                headContainer(size: geometry.size)
                     .offset(x: fixedValue(from: relativeValue, at: geometry.size))
                 Color.clear
                     .aspectRatio(1, contentMode: .fit)
                     .padding(Self.hitAreaPadding)
                     .contentShape(.capsule)
                     .gesture(dragGesture(size: geometry.size))
+                    .simultaneousGesture(earlyDragGesture())
                     .padding(-Self.hitAreaPadding)
                     .offset(x: fixedValue(from: relativeStartValue ?? relativeValue, at: geometry.size))
             }
         }
-        .frame(height: circleRadius * 2)
+        .frame(height: headSize.height)
         .coordinateSpace(name: Self.coordinateSpaceName)
         .padding(1)
         .compositingGroup()
@@ -150,7 +179,7 @@ public struct IncrementalSlider: View {
     }
     
     private func fixedValue(from relativeValue: CGFloat, at size: CGSize) -> CGFloat {
-        min(max(relativeValue, 0.0), 1.0) * (size.width - circleRadius * 2)
+        min(max(relativeValue, 0.0), 1.0) * (size.width - headSize.width)
     }
     
     private func barContainer(size: CGSize) -> some View {
@@ -159,16 +188,16 @@ public struct IncrementalSlider: View {
             HStack(spacing: 0.0) {
                 ForEach(0..<incrementCount, id: \.self) { _ in
                     RoundedRectangle(cornerRadius: barHeight / 2)
-                        .opacity(0.1)
+                        .opacity(0.25)
                         .padding(.horizontal, incrementSpacing / 2)
                 }
             }
             
             Rectangle()
-                .frame(width: max(0, abs(min(max(relativeZero, 0.0), 1.0) - min(max(relativeValue, 0.0), 1.0)) * (size.width - circleRadius * 2)))
-                .offset(x: min(max(min(relativeZero, relativeValue), 0.0), 1.0) * (size.width - circleRadius * 2))
+                .frame(width: max(0, abs(min(max(relativeZero, 0.0), 1.0) - min(max(relativeValue, 0.0), 1.0)) * (size.width - headSize.width)))
+                .offset(x: min(max(min(relativeZero, relativeValue), 0.0), 1.0) * (size.width - headSize.width))
                 .foregroundColor(.accentColor)
-                .frame(width: max(0, size.width - circleRadius * 2), alignment: .leading)
+                .frame(width: max(0, size.width - headSize.width), alignment: .leading)
                 .mask(
                     HStack(spacing: 0.0) {
                         ForEach(0..<incrementCount, id: \.self) { _ in
@@ -182,34 +211,33 @@ public struct IncrementalSlider: View {
         .frame(height: barHeight)
     }
     
-    private func circleContainer(size: CGSize) -> some View {
+    private func headContainer(size: CGSize) -> some View {
         Group {
-            if isDragging {
-                circleContent
-            } else {
-                circleContent
+            headContent
 #if !os(macOS)
-                    .hoverEffect(.lift)
+                .hoverEffect(.lift)
 #endif
-            }
         }
-        .frame(width: circleRadius * 2, height: circleRadius * 2)
+        .padding(.horizontal, expand ? -headLiftPadding * headAspectRatio : 0)
+        .padding(.vertical, expand ? -headLiftPadding : 0)
+        .frame(width: headSize.width, height: headSize.height)
+        .animation(.easeInOut(duration: 0.1), value: expand)
     }
     
-    private var circleContent: some View {
-        Circle()
-            .foregroundColor(Color(white: isDragging ? 0.95 : 1.0))
+    private var headContent: some View {
+        Capsule()
+            .foregroundColor(expand ? .primary.opacity(0.1) : .white)
             .overlay {
-                Circle()
-                    .stroke()
+                Capsule()
+                    .stroke(lineWidth: 1.5)
                     .opacity(0.2)
             }
             .overlay {
                 Group {
                     if relativeValue == defaultValue {
                         Circle()
-                            .frame(width: circleRadius / 1.5,
-                                   height: circleRadius / 1.5)
+                            .frame(width: headSize.height / 3,
+                                   height: headSize.height / 3)
                     } else {
                         Group {
                             if relativeValue < 0.0 {
@@ -226,6 +254,18 @@ public struct IncrementalSlider: View {
             }
     }
     
+    private func earlyDragGesture() -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                if !isEarlyDragging {
+                    isEarlyDragging = true
+                }
+            }
+            .onEnded { _ in
+                isEarlyDragging = false
+            }
+    }
+    
     private func dragGesture(size: CGSize) -> some Gesture {
         DragGesture(coordinateSpace: .named(Self.coordinateSpaceName))
             .onChanged { value in
@@ -234,7 +274,7 @@ public struct IncrementalSlider: View {
                     isDragging = true
                     willChange()
                 }
-                var value: CGFloat = (value.location.x - circleRadius) / (size.width - circleRadius * 2)
+                var value: CGFloat = (value.location.x - headSize.width / 2) / (size.width - headSize.width)
                 value = min(max(value, 0.0), 1.0)
                 if let incrementIndex: Int = findIncrementIndex(value) {
                     if atIncrementIndex != incrementIndex {
