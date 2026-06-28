@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MultiViews
+import CoreGraphicsExtensions
 
 public struct IncrementalSlider: View {
     
@@ -30,6 +31,8 @@ public struct IncrementalSlider: View {
     
     let relativeIncrement: CGFloat?
     
+    let minimumDistance: CGFloat
+    
     let hint: Bool
     
     /// Incremental Slider
@@ -39,6 +42,7 @@ public struct IncrementalSlider: View {
         minimum: CGFloat = 0.0,
         maximum: CGFloat = 1.0,
         increment: CGFloat? = nil,
+        minimumDistance: CGFloat = 10.0,
         hint: Bool = false,
         willChange: @escaping () -> Void = {},
         didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
@@ -62,6 +66,7 @@ public struct IncrementalSlider: View {
         self.relativeIncrement = if let increment, span != 0.0 {
             increment / span
         } else { nil }
+        self.minimumDistance = minimumDistance
         self.hint = hint
     }
     
@@ -73,6 +78,7 @@ public struct IncrementalSlider: View {
         relativeDefault: CGFloat,
         relativeZero: CGFloat = 0.0,
         relativeIncrement: CGFloat? = nil,
+        minimumDistance: CGFloat = 10.0,
         hint: Bool = false,
         willChange: @escaping () -> Void = {},
         didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
@@ -83,6 +89,7 @@ public struct IncrementalSlider: View {
         self.didChange = didChange
         self.relativeZero = relativeZero
         self.relativeIncrement = relativeIncrement
+        self.minimumDistance = minimumDistance
         self.hint = hint
     }
     
@@ -154,31 +161,32 @@ public struct IncrementalSlider: View {
                         .padding(Self.hitAreaPadding)
                         .contentShape(.capsule)
                         .overlay {
-                            AxisPanGestureView(
-                                axis: .horizontal,
-                                onChanged: { recognizer in
-                                    onChanged(
-                                        at: recognizer.location(in: recognizer.view),
-                                        size: geometry.size
-                                    )
-                                },
-                                onEnded: { _ in
-                                    onEnded()
-                                }
-                            )
-                        }
-                        .overlay {
-                            AxisPanGestureView(
-                                axis: .horizontal,
-                                onChanged: { recognizer in
-                                    if !isEarlyDragging {
-                                        isEarlyDragging = true
+                            GeometryReader { innerGeometry in
+                                AxisPanGestureView(
+                                    axis: .horizontal,
+                                    minimumDistance: minimumDistance,
+                                    simultaneousGesture: true,
+                                    simultaneousMinimumDistance: 0.0,
+                                    onChanged: { recognizer in
+                                        let origin: CGPoint = innerGeometry.frame(in: .named(Self.coordinateSpaceName)).origin
+                                        onChanged(
+                                            at: origin + recognizer.location(in: recognizer.view),
+                                            size: geometry.size
+                                        )
+                                    },
+                                    onEnded: { _ in
+                                        onEnded()
+                                    },
+                                    onSimultaneousChanged: { _ in
+                                        if !isEarlyDragging {
+                                            isEarlyDragging = true
+                                        }
+                                    },
+                                    onSimultaneousEnded: { _ in
+                                        isEarlyDragging = false
                                     }
-                                },
-                                onEnded: { _ in
-                                    isEarlyDragging = false
-                                }
-                            )
+                                )
+                            }
                         }
 #else
                     Color.clear
@@ -311,7 +319,7 @@ public struct IncrementalSlider: View {
     }
     
     private func dragGesture(size: CGSize) -> some Gesture {
-        DragGesture(coordinateSpace: .named(Self.coordinateSpaceName))
+        DragGesture(minimumDistance: minimumDistance, coordinateSpace: .named(Self.coordinateSpaceName))
             .onChanged { value in
                 onChanged(at: value.location, size: size)
             }
