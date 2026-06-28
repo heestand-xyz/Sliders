@@ -26,6 +26,8 @@ public struct IncrementalSlider: View {
         
     var willChange: () -> ()
     var didChange: (CGFloat, CGFloat) -> ()
+    var willInteract: () -> ()
+    var didInteract: () -> ()
 
     let relativeZero: CGFloat
     
@@ -45,7 +47,9 @@ public struct IncrementalSlider: View {
         minimumDistance: CGFloat = 10.0,
         hint: Bool = false,
         willChange: @escaping () -> Void = {},
-        didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
+        didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in },
+        willInteract: @escaping () -> Void = {},
+        didInteract: @escaping () -> Void = {}
     ) {
         let span: CGFloat = maximum - minimum
         _relativeValue = Binding {
@@ -62,6 +66,8 @@ public struct IncrementalSlider: View {
         self.didChange = { oldValue, newValue in
             didChange(oldValue * span + minimum, newValue * span + minimum)
         }
+        self.willInteract = willInteract
+        self.didInteract = didInteract
         self.relativeZero = -minimum / span
         self.relativeIncrement = if let increment, span != 0.0 {
             increment / span
@@ -81,12 +87,16 @@ public struct IncrementalSlider: View {
         minimumDistance: CGFloat = 10.0,
         hint: Bool = false,
         willChange: @escaping () -> Void = {},
-        didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in }
+        didChange: @escaping (CGFloat, CGFloat) -> Void = { _, _ in },
+        willInteract: @escaping () -> Void = {},
+        didInteract: @escaping () -> Void = {}
     ) {
         _relativeValue = relativeValue
         self.defaultValue = relativeDefault
         self.willChange = willChange
         self.didChange = didChange
+        self.willInteract = willInteract
+        self.didInteract = didInteract
         self.relativeZero = relativeZero
         self.relativeIncrement = relativeIncrement
         self.minimumDistance = minimumDistance
@@ -180,9 +190,13 @@ public struct IncrementalSlider: View {
                                     onSimultaneousChanged: { _ in
                                         if !isEarlyDragging {
                                             isEarlyDragging = true
+                                            willInteract()
                                         }
                                     },
                                     onSimultaneousEnded: { _ in
+                                        if isEarlyDragging {
+                                            didInteract()
+                                        }
                                         isEarlyDragging = false
                                     }
                                 )
@@ -311,9 +325,13 @@ public struct IncrementalSlider: View {
             .onChanged { value in
                 if !isEarlyDragging {
                     isEarlyDragging = true
+                    willInteract()
                 }
             }
             .onEnded { _ in
+                if isEarlyDragging {
+                    didInteract()
+                }
                 isEarlyDragging = false
             }
     }
