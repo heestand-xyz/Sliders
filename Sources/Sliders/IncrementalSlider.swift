@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MultiViews
 
 public struct IncrementalSlider: View {
     
@@ -146,14 +147,50 @@ public struct IncrementalSlider: View {
                     .padding(.horizontal, headSize.width / 2)
                 headContainer(size: geometry.size)
                     .offset(x: fixedValue(from: relativeValue, at: geometry.size))
-                Color.clear
-                    .aspectRatio(1, contentMode: .fit)
-                    .padding(Self.hitAreaPadding)
-                    .contentShape(.capsule)
-                    .gesture(dragGesture(size: geometry.size))
-                    .simultaneousGesture(earlyDragGesture())
-                    .padding(-Self.hitAreaPadding)
-                    .offset(x: fixedValue(from: relativeStartValue ?? relativeValue, at: geometry.size))
+                Group {
+#if canImport(UIKit)
+                    Color.clear
+                        .aspectRatio(1, contentMode: .fit)
+                        .padding(Self.hitAreaPadding)
+                        .contentShape(.capsule)
+                        .overlay {
+                            AxisPanGestureView(
+                                axis: .horizontal,
+                                onChanged: { recognizer in
+                                    onChanged(
+                                        at: recognizer.location(in: recognizer.view),
+                                        size: geometry.size
+                                    )
+                                },
+                                onEnded: { _ in
+                                    onEnded()
+                                }
+                            )
+                        }
+                        .overlay {
+                            AxisPanGestureView(
+                                axis: .horizontal,
+                                onChanged: { recognizer in
+                                    if !isEarlyDragging {
+                                        isEarlyDragging = true
+                                    }
+                                },
+                                onEnded: { _ in
+                                    isEarlyDragging = false
+                                }
+                            )
+                        }
+#else
+                    Color.clear
+                        .aspectRatio(1, contentMode: .fit)
+                        .padding(Self.hitAreaPadding)
+                        .contentShape(.capsule)
+                        .gesture(dragGesture(size: geometry.size))
+                        .simultaneousGesture(earlyDragGesture())
+#endif
+                }
+                .padding(-Self.hitAreaPadding)
+                .offset(x: fixedValue(from: relativeStartValue ?? relativeValue, at: geometry.size))
                 Color.clear
                     .frame(width: headSize.width, height: headSize.height)
                     .onHover { active in
@@ -276,32 +313,40 @@ public struct IncrementalSlider: View {
     private func dragGesture(size: CGSize) -> some Gesture {
         DragGesture(coordinateSpace: .named(Self.coordinateSpaceName))
             .onChanged { value in
-                if !isDragging {
-                    relativeStartValue = relativeValue
-                    isDragging = true
-                    willChange()
-                }
-                var value: CGFloat = (value.location.x - headSize.width / 2) / (size.width - headSize.width)
-                value = min(max(value, 0.0), 1.0)
-                if let incrementIndex: Int = findIncrementIndex(value) {
-                    if atIncrementIndex != incrementIndex {
-                        atIncrementIndex = incrementIndex
-                        setIncrement(index: incrementIndex)
-                    }
-                } else {
-                    if atIncrementIndex != nil {
-                        atIncrementIndex = nil
-                    }
-                    set(value: value)
-                }
+                onChanged(at: value.location, size: size)
             }
             .onEnded { _ in
-                if let relativeStartValue: CGFloat {
-                    didChange(relativeStartValue, relativeValue)
-                }
-                isDragging = false
-                relativeStartValue = nil
+                onEnded()
             }
+    }
+
+    private func onChanged(at location: CGPoint, size: CGSize) {
+        if !isDragging {
+            relativeStartValue = relativeValue
+            isDragging = true
+            willChange()
+        }
+        var value: CGFloat = (location.x - headSize.width / 2) / (size.width - headSize.width)
+        value = min(max(value, 0.0), 1.0)
+        if let incrementIndex: Int = findIncrementIndex(value) {
+            if atIncrementIndex != incrementIndex {
+                atIncrementIndex = incrementIndex
+                setIncrement(index: incrementIndex)
+            }
+        } else {
+            if atIncrementIndex != nil {
+                atIncrementIndex = nil
+            }
+            set(value: value)
+        }
+    }
+    
+    private func onEnded() {
+        if let relativeStartValue: CGFloat {
+            didChange(relativeStartValue, relativeValue)
+        }
+        isDragging = false
+        relativeStartValue = nil
     }
     
     private func update(value: CGFloat) {

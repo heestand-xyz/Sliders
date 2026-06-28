@@ -14,8 +14,15 @@ let package = Package(
             name: "Sliders",
             targets: ["Sliders"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/heestand-xyz/MultiViews", from: "3.2.0"),
+    ],
     targets: [
         .target(
-            name: "Sliders"),
+            name: "Sliders",
+            dependencies: [
+                "MultiViews",
+            ]
+        ),
     ]
 )
